@@ -1,6 +1,6 @@
 /*
  * --- Revised 3-Clause BSD License ---
- * Copyright Semtech Corporation 2020. All rights reserved.
+ * Copyright Semtech Corporation 2022. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -28,7 +28,6 @@
 
 #include "mbedtls/net_sockets.h"
 #include "mbedtls/ssl.h"
-#include "mbedtls/certs.h"
 #include "mbedtls/entropy.h"
 #include "mbedtls/ctr_drbg.h"
 #include "mbedtls/error.h"
@@ -77,7 +76,7 @@ static mbedtls_ctr_drbg_context* assertDBRG () {
 
 #ifdef CFG_max_tls_frag_len
     // Report this only once - at startup
-    LOG(WARNING, "TLS is using a maximum fragment length of %d bytes", 256 << CFG_max_tls_frag_len);
+    LOG(MOD_AIO|WARNING, "TLS is using a maximum fragment length of %d bytes", 256 << CFG_max_tls_frag_len);
 #endif // CFG_max_tls_frag_len
 
     return &DBRG->ctr_drbg;
@@ -193,7 +192,7 @@ static int _readCAs (mbedtls_x509_crt** pcas, const char* cafile, int len, const
     if( len <= 0 ) {
         // Reuse buffer to print cert info before freeing
         mbedtls_x509_crt_info( (char*)certb, certl, "", cas );
-        LOG(INFO,"%s: \n%s", cafile, certb);
+        LOG(MOD_AIO|INFO,"%s: \n%s", cafile, certb);
         rt_free(certb);
     }
 
@@ -230,12 +229,19 @@ int tls_setMyCert (tlsconf_t* conf, const char* cert, int certlen, const char* k
         keyb = (u1_t*)dbuf.buf;
         keyl = dbuf.bufsize+1;
     }
-    if( (ret = mbedtls_pk_parse_key(mykey, keyb, keyl, (const u1_t*)pwd, pwd?strlen(pwd):0)) != 0 ) {
+    ret = mbedtls_pk_parse_key(mykey, keyb, keyl, (const u1_t*)pwd, pwd?strlen(pwd):0
+#if MBEDTLS_VERSION_NUMBER >= 0x03000000 /* mbedtls 3.0.0 */
+                               , mbedtls_ctr_drbg_random, assertDBRG()
+#endif
+                              );
+    if( ret != 0 ) {
         log_mbedError(ERROR, ret, "Parsing key");
         goto errexit;
     }
-    if( keylen <= 0 )
+    if( keylen <= 0 ) {
         rt_free(keyb);
+        keyb = NULL;
+    }
     if( !_readCAs(&conf->mycert, cert, certlen, "my cert") )
         goto errexit;
     conf->mykey = mykey;

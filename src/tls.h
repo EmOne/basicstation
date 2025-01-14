@@ -1,6 +1,6 @@
 /*
  * --- Revised 3-Clause BSD License ---
- * Copyright Semtech Corporation 2020. All rights reserved.
+ * Copyright Semtech Corporation 2022. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -30,7 +30,11 @@
 #define _tls_h_
 
 #include "mbedtls/ssl.h"
-#include "mbedtls/net.h"
+#if MBEDTLS_VERSION_NUMBER < 0x02040000L
+#include <mbedtls/net.h>
+#else
+#include "mbedtls/net_sockets.h"
+#endif
 
 typedef struct tlsconf tlsconf_t;
 typedef struct mbedtls_ssl_context* tlsctx_p;
